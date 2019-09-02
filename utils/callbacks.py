@@ -105,7 +105,7 @@ class IouCallback(MetricCallback):
             threshold: float = None,
             activation: str = "Sigmoid"
             ):
-        """ 
+        """
         Args:
             outputs (torch.Tensor): A list of predicted elements
             targets (torch.Tensor):  A list of elements that are to be predicted
