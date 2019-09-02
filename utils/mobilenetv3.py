@@ -1,3 +1,4 @@
+import os
 import torch
 
 from MobileNetV3 import MobileNetV3
@@ -22,8 +23,9 @@ def mobilenetv3(num_classes=1000, scale=1., in_channels=3, small=False):
                         in_channels=in_channels,
                         small=small)
 
-    state = torch.load('mobilenetv3/results/mobilenetv3large-v1/model_best0-ec869f9b.pth')
-    model.load_state_dict(prepare_state_dict(state['state_dict'], num_classes),
-                          map_location='cpu')
+    dir = os.path.split(__file__)[0]
+    checkpoint = 'mobilenetv3/results/mobilenetv3large-v1/model_best0-ec869f9b.pth'
+    state = torch.load(os.path.join(dir, checkpoint), map_location='cpu')
+    model.load_state_dict(prepare_state_dict(state['state_dict'], num_classes))
 
     return model
