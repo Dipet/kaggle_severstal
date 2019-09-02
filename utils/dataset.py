@@ -8,16 +8,17 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
-from albumentations import Compose, Normalize, HorizontalFlip
+from albumentations import Compose, Normalize, Flip, HorizontalFlip
 from albumentations.pytorch import ToTensor
 
 
 class SteelDataset(Dataset):
-    def __init__(self, df, transforms, phase='train', catalyst=True):
+    def __init__(self, df, transforms, phase='train', catalyst=True, binary=False):
         self.df = df
         self.transforms = transforms
         self.phase = phase
         self.catalyst = catalyst
+        self.binary = binary
 
     @staticmethod
     def mask2rle(img):
@@ -74,23 +75,47 @@ class SteelDataset(Dataset):
             return img, mask
 
     def _get_infer(self, idx):
-        img_path = self.df.iloc[idx]['ImageId']
+        img_path = self.df.iloc[idx].name
 
-        img = cv.imread(img_path)
+        img = cv.imread(img_path, cv.IMREAD_COLOR)
 
-        augmented = self.transforms(image=img)
-        img = augmented['image']
+        if self.transforms:
+            augmented = self.transforms(image=img)
+            img = augmented['image']
 
         if self.catalyst:
             return {'features': img}
         else:
             return img
 
+    def _get_binary(self, idx):
+        img_path = self.df.iloc[idx].name
+
+        img = cv.imread(img_path, cv.IMREAD_COLOR)
+        mask = self.make_mask(idx)
+
+        if self.transforms:
+            augmented = self.transforms(image=img, mask=mask)
+            img = augmented['image']
+            mask = augmented['mask']  # 1x256x1600x4
+        cls = np.all(mask == 0).astype(int)
+
+        if self.catalyst:
+            return {'targets': cls, 'features': img}
+        else:
+            return img, cls
+
     def __getitem__(self, idx):
+        if self.phase == 'infer':
+            return self._get_infer(idx)
+
+        if self.binary:
+            return self._get_binary(idx)
+
         if self.phase in ['train', 'valid', 'test']:
             return self._get_train_valid(idx)
 
-        return self._get_infer(idx)
+        raise Exception('Something wrong')
 
     def __len__(self):
         return len(self.df)
@@ -126,8 +151,8 @@ def read_dataset(path, data_folder):
 
 
 def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
-                   phase, catalyst, pin_memory):
-    dataset = SteelDataset(df, transforms, phase, catalyst)
+                   phase, catalyst, pin_memory, binary):
+    dataset = SteelDataset(df, transforms, phase, catalyst, binary=binary)
     return DataLoader(dataset,
                       batch_size=batch_size,
                       shuffle=shuffle,
@@ -135,7 +160,8 @@ def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
                       pin_memory=pin_memory)
 
 
-def get_train_val_datasets(df_path, data_folder, mean=None, std=None, catalyst=True):
+def get_train_val_datasets(df_path, data_folder, mean=None, std=None,
+                           catalyst=True, binary=False):
     df = read_dataset(df_path, data_folder)
 
     train_df, val_df = train_test_split(df, test_size=0.2,
@@ -144,8 +170,8 @@ def get_train_val_datasets(df_path, data_folder, mean=None, std=None, catalyst=T
     train_transforms = get_train_transforms(mean, std)
     val_transforms = get_inference_transforms(mean, std)
 
-    train_dataset = SteelDataset(train_df, train_transforms, 'train', catalyst)
-    val_dataset = SteelDataset(val_df, val_transforms, 'valid', catalyst)
+    train_dataset = SteelDataset(train_df, train_transforms, 'train', catalyst, binary=binary)
+    val_dataset = SteelDataset(val_df, val_transforms, 'valid', catalyst, binary=binary)
 
     return train_dataset, val_dataset
 
@@ -159,8 +185,9 @@ def get_train_val_dataloaders(
         num_workers=4,
         catalyst=False,
         pin_memory=False,
+        binary=False,
 ):
-    train_dataset, val_dataset = get_train_val_datasets(df_path, data_folder, mean, std, catalyst)
+    train_dataset, val_dataset = get_train_val_datasets(df_path, data_folder, mean, std, catalyst, binary=binary)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=batch_size,

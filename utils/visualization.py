@@ -31,11 +31,17 @@ def show_masks(img, masks):
 
 
 if __name__ == '__main__':
-    from dataset import read_dataset, SteelDataset
+    from dataset import read_dataset, SteelDataset, get_train_transforms
 
     df = read_dataset('../dataset/train.csv', '../dataset/train_images')
-    dataset = SteelDataset(df, None, 'valid', catalyst=False)
+    transforms = get_train_transforms(mean=(0.485, 0.456, 0.406),
+                                      std=(0.229, 0.224, 0.225),)
+    dataset = SteelDataset(df, transforms, 'valid', catalyst=False)
 
-    for i in dataset:
-        show_masks(*i)
+    for img, mask in dataset:
+        img = img.cpu().numpy()
+        mask = mask.cpu().numpy()
+
+        img = np.transpose(img, [1, 2, 0])
+        show_masks(img, mask)
         plt.show()

@@ -13,7 +13,7 @@ import segmentation_models_pytorch as smp
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.resnet50_1e4_adam_sgd_momentum_weightdecay'
+NAME = '1.1.resnet50_1e4_sgd_momentum_weightdecay'
 logdir = f"./logdir/{NAME}"
 num_epochs = 50
 encoder = 'resnet50'
