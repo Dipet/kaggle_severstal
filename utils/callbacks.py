@@ -141,3 +141,54 @@ class IouCallback(MetricCallback):
             result.append(1 if s < eps else d)
 
         return np.mean(result)
+
+
+class AccuracyCallback(MetricCallback):
+    """
+        IoU (Jaccard) metric callback.
+    """
+    def __init__(
+            self,
+            input_key: str = "targets",
+            output_key: str = "logits",
+            prefix: str = "accuracy",
+            eps: float = 1e-7,
+            threshold: float = None,
+            activation: str = "Sigmoid",
+    ):
+        """
+        Args:
+            input_key (str): input key to use for iou calculation
+                specifies our ``y_true``.
+            output_key (str): output key to use for iou calculation;
+                specifies our ``y_pred``
+            prefix (str): key to store in logs
+            eps (float): epsilon to avoid zero division
+            threshold (float): threshold for outputs binarization
+            activation (str): An torch.nn activation applied to the outputs.
+                Must be one of ['none', 'Sigmoid', 'Softmax2d']
+        """
+        super().__init__(
+            prefix=prefix,
+            metric_fn=self.accuracy,
+            input_key=input_key,
+            output_key=output_key,
+            eps=eps,
+            threshold=threshold,
+            activation=activation
+        )
+
+    @staticmethod
+    def accuracy(outputs: torch.Tensor,
+                   targets: torch.Tensor,
+                   eps: float = 1e-7,
+                   threshold: float = None,
+                   activation: str = "Sigmoid"):
+        activation_fn = get_activation_fn(activation)
+        outputs = activation_fn(outputs)
+
+        if threshold is not None:
+            outputs = (outputs > threshold).float()
+
+        eq = (outputs == targets).long().float().sum()
+        return eq / (targets.view(-1).size(0) + eps)

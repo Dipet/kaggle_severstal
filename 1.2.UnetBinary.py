@@ -1,10 +1,11 @@
 from torch import nn
+from torch.nn import functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 
 from utils.dataset import *
-from utils.callbacks import DiceCallback as MyDiceCallbak, IouCallback as MyIouCallback
+from utils.callbacks import DiceCallback as MyDiceCallbak, IouCallback as MyIouCallback, AccuracyCallback
 
 from catalyst.dl import SupervisedRunner, DiceCallback, IouCallback, AUCCallback
 from catalyst.utils import set_global_seed, prepare_cudnn
@@ -24,10 +25,8 @@ LOGDIR = f"./logdir/{NAME}"
 
 # Train binary
 # ------------------------------------------------------------------------------
-model = mobilenetv3(1)
-
 logdir = os.path.join(LOGDIR, 'binary/')
-num_epochs = 50
+num_epochs = 20
 
 FP16 = True
 
@@ -41,6 +40,9 @@ momentum = 0.9
 mean = (0.485, 0.456, 0.406)
 std = (0.229, 0.224, 0.225)
 num_workers = 6
+
+
+model = mobilenetv3(1)
 
 # Dataloaders
 train, val = get_train_val_dataloaders(df='dataset/train.csv',
@@ -71,6 +73,7 @@ runner.train(
     verbose=True,
     callbacks=[
         AUCCallback(),
+        AccuracyCallback(threshold=0.5),
     ],
     fp16=FP16,
 )
@@ -79,9 +82,9 @@ runner.train(
 
 # Prepare data for segmentation
 # ==============================================================================
-df = read_dataset('data/train.csv', 'data/train_images')
+df = read_dataset('dataset/train.csv', 'dataset/train_images')
 dataloader = get_dataloader(df, get_inference_transforms(mean, std),
-                            batch_size,
+                            batch_size=batch_size,
                             shuffle=False,
                             num_workers=num_workers,
                             phase='valid',
@@ -89,31 +92,26 @@ dataloader = get_dataloader(df, get_inference_transforms(mean, std),
                             pin_memory=False,
                             binary=True)
 
-labels = []
-results = []
-model = model.eval()
-for images, label in tqdm(dataloader, total=len(dataloader), desc='Inference binary'):
-    images = images.cuda()
+results = runner.predict_loader(dataloader, resume=os.path.join(logdir, "checkpoints/best.pth"))
+results = torch.from_numpy(results)
 
-    result = model(images).detach().cpu().numpy().flatten().tolist()
-    results += result
-    labels += label.cpu().numpy().flatten().tolist()
-del images, label
-results = np.array(results)
-labels = np.array(labels).astype(int)
+labels = []
+for images, label in tqdm(dataloader, total=len(dataloader), desc='Inference binary'):
+    labels.append(label)
+labels = torch.cat(labels)
 
 thresholds = {}
 for i in np.arange(0.05, 1, 0.05):
-    res = (results > i).astype(int)
-    thresholds[i] = np.abs(res - labels).sum() / len(labels)
+    accuracy = AccuracyCallback.accuracy(results, labels, threshold=i)
+    thresholds[i] = accuracy
 
 thresholds = list(thresholds.items())
 best_threshold = sorted(thresholds, reverse=True, key=lambda x: x[1])[0][0]
 
-df = df.loc[results > best_threshold]
+df = df.loc[(results > best_threshold).numpy().flatten()]
 
 print(best_threshold)
-with open(os.path.join(logdir, 'best_thres.txt'), 'r') as file:
+with open(os.path.join(logdir, 'best_thres.txt'), 'w') as file:
     file.write(str(best_threshold))
 # ==============================================================================
 
