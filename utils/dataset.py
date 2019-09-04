@@ -4,6 +4,7 @@ import os
 import cv2 as cv
 import numpy as np
 import pandas as pd
+import torch
 
 from sklearn.model_selection import train_test_split
 
@@ -114,7 +115,11 @@ class SteelDataset(Dataset):
             augmented = self.transforms(image=img, mask=mask)
             img = augmented['image']
             mask = augmented['mask']  # 1x256x1600x4
-        cls = np.all(mask == 0).astype(int)
+
+        if isinstance(mask, np.ndarray):
+            cls = np.any(mask != 0).astype(int)
+        else:
+            cls = torch.Tensor([torch.any(mask != 0).long()])
 
         if self.catalyst:
             return {'targets': cls, 'features': img}
@@ -176,9 +181,10 @@ def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
                       pin_memory=pin_memory)
 
 
-def get_train_val_datasets(df_path, data_folder, mean=None, std=None,
+def get_train_val_datasets(df, data_folder=None, mean=None, std=None,
                            catalyst=True, binary=False, full_train=False):
-    df = read_dataset(df_path, data_folder)
+    if isinstance(df, str):
+        df = read_dataset(df, data_folder)
 
     train_df, val_df = train_test_split(df, test_size=0.2,
                                         stratify=df["defects"])
@@ -196,8 +202,8 @@ def get_train_val_datasets(df_path, data_folder, mean=None, std=None,
 
 
 def get_train_val_dataloaders(
-        df_path,
-        data_folder,
+        df,
+        data_folder=None,
         mean=None,
         std=None,
         batch_size=8,
@@ -207,7 +213,7 @@ def get_train_val_dataloaders(
         binary=False,
         full_train=False,
 ):
-    train_dataset, val_dataset = get_train_val_datasets(df_path, data_folder, mean, std, catalyst, binary=binary, full_train=full_train)
+    train_dataset, val_dataset = get_train_val_datasets(df, data_folder, mean, std, catalyst, binary=binary, full_train=full_train)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=batch_size,

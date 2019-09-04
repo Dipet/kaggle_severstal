@@ -28,7 +28,7 @@ weight_decay = 1e-5
 momentum = 0.9
 
 # Dataloaders
-train, val = get_train_val_dataloaders(df_path='dataset/train.csv',
+train, val = get_train_val_dataloaders(df='dataset/train.csv',
                                        data_folder='dataset/train_images',
                                        mean=(0.485, 0.456, 0.406),
                                        std=(0.229, 0.224, 0.225),
