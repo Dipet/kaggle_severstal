@@ -8,9 +8,17 @@ import matplotlib.pyplot as plt
 PALET = [(249, 192, 12), (0, 185, 241), (114, 0, 218), (249,50,12)]
 
 
-def draw_masks(img, masks):
-    for j, mask in enumerate(masks):
+def draw_masks(img, masks, orig_masks=None):
+    if orig_masks is None:
+        orig_masks = [None] * len(masks)
+
+    for j, (mask, omask) in enumerate(zip(masks, orig_masks)):
         mask = mask.astype(np.uint8)
+
+        if omask is not None:
+            omask = omask.astype(np.bool)
+            color = np.clip(np.array(PALET[j]) * 2, 0, 255)
+            img[omask] = color
 
         if np.all(mask == 0):
             continue

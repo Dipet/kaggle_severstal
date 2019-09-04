@@ -1,7 +1,7 @@
 import os
 import torch
 
-from MobileNetV3 import MobileNetV3
+from MobileNetV3 import mobilenetv3
 
 
 def prepare_state_dict(state_dict, n_class):
@@ -15,17 +15,3 @@ def prepare_state_dict(state_dict, n_class):
         elif key.startswith('last_block.fc.bias'):
             result[key] = torch.zeros([n_class])
     return result
-
-
-def mobilenetv3(num_classes=1000, scale=1., in_channels=3, small=False):
-    model = MobileNetV3(num_classes=num_classes,
-                        scale=scale,
-                        in_channels=in_channels,
-                        small=small)
-
-    dir = os.path.split(__file__)[0]
-    checkpoint = 'mobilenetv3/results/mobilenetv3large-v1/model_best0-ec869f9b.pth'
-    state = torch.load(os.path.join(dir, checkpoint), map_location='cpu')
-    model.load_state_dict(prepare_state_dict(state['state_dict'], num_classes))
-
-    return model

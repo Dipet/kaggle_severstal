@@ -1,5 +1,5 @@
 from torch import nn
-from torch.optim import Adam, SGD
+from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from utils.dataset import get_train_val_dataloaders
@@ -13,7 +13,7 @@ import segmentation_models_pytorch as smp
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.resnet50_1e4_sgd_momentum_weightdecay'
+NAME = '1.1.resnet50_dice_loss'
 logdir = f"./logdir/{NAME}"
 num_epochs = 50
 encoder = 'resnet50'
@@ -34,16 +34,17 @@ train, val = get_train_val_dataloaders(df_path='dataset/train.csv',
                                        std=(0.229, 0.224, 0.225),
                                        batch_size=batch_size,
                                        num_workers=6,
-                                       pin_memory=False)
+                                       pin_memory=False,
+                                       full_train=False)
 loaders = {"train": train, "valid": val}
 
 # Model
 model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
 
 # Optimizer
-criterion = nn.BCEWithLogitsLoss()
-# optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-optimizer = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+# criterion = nn.BCEWithLogitsLoss()
+criterion = smp.utils.losses.DiceLoss()
+optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
 
 # Train
