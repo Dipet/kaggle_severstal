@@ -20,7 +20,7 @@ import os
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.2.resnet50_binary'
+NAME = '1.2.resnet50_binary_diceloss'
 LOGDIR = f"./logdir/{NAME}"
 
 # Train binary
@@ -143,7 +143,8 @@ loaders = {"train": train, "valid": val}
 model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
 
 # Optimizer
-criterion = nn.BCEWithLogitsLoss()
+# criterion = nn.BCEWithLogitsLoss()
+criterion = smp.utils.losses.DiceLoss()
 optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
 
