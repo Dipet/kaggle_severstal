@@ -29,6 +29,16 @@ def mask2rle(img):
     return ' '.join(str(x) for x in runs)
 
 
+def rle_to_mask(rle):
+    label = rle.split(" ")
+    positions = map(int, label[0::2])
+    length = map(int, label[1::2])
+    mask = np.zeros(256 * 1600, dtype=np.uint8)
+    for pos, le in zip(positions, length):
+        mask[pos:(pos + le)] = 1
+    return mask.reshape(256, 1600, order='F')
+
+
 class SteelDataset(Dataset):
     def __init__(self, df, transforms, phase='train', catalyst=True, binary=False):
         self.df = df
@@ -36,22 +46,6 @@ class SteelDataset(Dataset):
         self.phase = phase
         self.catalyst = catalyst
         self.binary = binary
-
-    @staticmethod
-    def mask2rle(img):
-        """https://www.kaggle.com/paulorzp/rle-functions-run-lenght-encode-decode
-
-        Args:
-            img: numpy array, 1 - mask, 0 - background
-
-        Returns
-            run length as string formated
-        """
-        pixels = img.T.flatten()
-        pixels = np.concatenate([[0], pixels, [0]])
-        runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
-        runs[1::2] -= runs[::2]
-        return ' '.join(str(x) for x in runs)
 
     def make_mask(self, row_id):
         '''Given a row index, return image_id and mask (256, 1600, 4)'''
@@ -61,13 +55,7 @@ class SteelDataset(Dataset):
 
         for idx, label in enumerate(labels.values):
             if label is not np.nan:
-                label = label.split(" ")
-                positions = map(int, label[0::2])
-                length = map(int, label[1::2])
-                mask = np.zeros(256 * 1600, dtype=np.uint8)
-                for pos, le in zip(positions, length):
-                    mask[pos:(pos + le)] = 1
-                masks[:, :, idx] = mask.reshape(256, 1600, order='F')
+                masks[:, :, idx] = rle_to_mask(label)
         return masks
 
     def _get_train_valid(self, idx):
