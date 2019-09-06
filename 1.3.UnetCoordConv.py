@@ -14,9 +14,9 @@ import segmentation_models_pytorch as smp
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.resnet50_full'
+NAME = '1.3.resnet50_coordconv'
 logdir = f"./logdir/{NAME}"
-num_epochs = 50
+num_epochs = 100
 encoder = 'resnet50'
 
 FP16 = True
@@ -36,7 +36,7 @@ train, val = get_train_val_dataloaders(df='dataset/train.csv',
                                        batch_size=batch_size,
                                        num_workers=6,
                                        pin_memory=False,
-                                       full_train=True)
+                                       full_train=False)
 loaders = {"train": train, "valid": val}
 
 
@@ -44,7 +44,7 @@ class Model(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.coord_conv = CoordConv(3, 34, True, kernel_size=3, padding=1)
+        self.coord_conv = CoordConv(3, 3, True, kernel_size=3, padding=1)
         self.model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
 
     def forward(self, x):
