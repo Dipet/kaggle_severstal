@@ -14,6 +14,39 @@ import segmentation_models_pytorch as smp
 prepare_cudnn(True, True)
 set_global_seed(0)
 
+
+class Model(nn.Module):
+    def __init__(self, encoder):
+        super().__init__()
+
+        self.coord_conv = CoordConv(3, 3, True, kernel_size=3, padding=1)
+        self.coord_conv_decoder = CoordConv(16, 16, True, kernel_size=3, padding=1)
+        self.model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
+
+    def _forward_decoder(self, x):
+        encoder_head = x[0]
+        skips = x[1:]
+
+        if self.model.decoder.center:
+            encoder_head = self.model.decoder.center(encoder_head)
+
+        x = self.model.decoder.layer1([encoder_head, skips[0]])
+        x = self.model.decoder.layer2([x, skips[1]])
+        x = self.model.decoder.layer3([x, skips[2]])
+        x = self.model.decoder.layer4([x, skips[3]])
+        x = self.model.decoder.layer5([x, None])
+        x = self.coord_conv_decoder(x)
+        x = self.model.decoder.final_conv(x)
+
+        return x
+
+    def forward(self, x):
+        x = self.coord_conv(x)
+        x = self.model.encoder(x)
+        x = self._forward_decoder(x)
+
+        return x
+
 NAME = '1.3.resnet50_coordconv'
 logdir = f"./logdir/{NAME}"
 num_epochs = 100
@@ -38,18 +71,6 @@ train, val = get_train_val_dataloaders(df='dataset/train.csv',
                                        pin_memory=False,
                                        full_train=False)
 loaders = {"train": train, "valid": val}
-
-
-class Model(nn.Module):
-    def __init__(self, encoder):
-        super().__init__()
-
-        self.coord_conv = CoordConv(3, 3, True, kernel_size=3, padding=1)
-        self.model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
-
-    def forward(self, x):
-        return self.model(self.coord_conv(x))
-
 
 # Model
 model = Model(encoder)
