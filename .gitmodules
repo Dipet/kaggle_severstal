@@ -1,3 +1,6 @@
 [submodule "utils/mobilenetv3"]
 	path = utils/mobilenetv3
 	url = https://github.com/Randl/MobileNetV3-pytorch.git
+[submodule "ternausnet"]
+	path = ternausnet
+	url = https://github.com/ternaus/robot-surgery-segmentation.git
