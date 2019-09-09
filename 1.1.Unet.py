@@ -13,9 +13,9 @@ import segmentation_models_pytorch as smp
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.resnet50_full'
+NAME = '1.1.resnet50_full_200'
 logdir = f"./logdir/{NAME}"
-num_epochs = 50
+num_epochs = 200
 encoder = 'resnet50'
 
 FP16 = True

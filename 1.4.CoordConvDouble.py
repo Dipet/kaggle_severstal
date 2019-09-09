@@ -47,7 +47,7 @@ class Model(nn.Module):
 
         return x
 
-NAME = '1.3.resnet50_coordconv'
+NAME = '1.4.resnet50_double_coordconv'
 logdir = f"./logdir/{NAME}"
 num_epochs = 100
 encoder = 'resnet50'
