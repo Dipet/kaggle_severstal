@@ -66,3 +66,27 @@ runner.train(
     ],
     fp16=FP16,
 )
+
+# Train on valid
+# Optimizer
+criterion = nn.BCEWithLogitsLoss()
+# criterion = smp.utils.losses.DiceLoss()
+optimizer = Adam(model.parameters(), lr=lr / 100, weight_decay=weight_decay)
+scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
+runner.train(
+    model=model,
+    criterion=criterion,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    loaders={"train": val, "valid": val},
+    logdir=logdir,
+    num_epochs=10,
+    verbose=True,
+    callbacks=[
+        DiceCallback(threshold=0.5, prefix='catalyst_dice'),
+        IouCallback(threshold=0.5, prefix='catalyst_iou'),
+        MyDiceCallbak(threshold=0.5),
+        MyIouCallback(threshold=0.5),
+    ],
+    fp16=FP16,
+)
