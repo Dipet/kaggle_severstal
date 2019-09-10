@@ -8,19 +8,18 @@ from utils.callbacks import DiceCallback as MyDiceCallbak, IouCallback as MyIouC
 from catalyst.dl import SupervisedRunner, DiceCallback, IouCallback
 from catalyst.utils import set_global_seed, prepare_cudnn
 
-import segmentation_models_pytorch as smp
+from ternausnet.models import UNet16, AlbuNet
 
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.se_resnet152'
+NAME = '1.5.ternausnet'
 logdir = f"./logdir/{NAME}"
-num_epochs = 200
-encoder = 'se_resnet152'
+num_epochs = 50
 
 FP16 = True
 
-batch_size = 4
+batch_size = 6
 default_batch_size = 8
 
 lr = 1e-4 * batch_size / default_batch_size
@@ -35,11 +34,11 @@ train, val = get_train_val_dataloaders(df='dataset/train.csv',
                                        batch_size=batch_size,
                                        num_workers=6,
                                        pin_memory=False,
-                                       full_train=False)
+                                       full_train=False,)
 loaders = {"train": train, "valid": val}
 
 # Model
-model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
+model = UNet16(4, pretrained=True)
 
 # Optimizer
 criterion = nn.BCEWithLogitsLoss()

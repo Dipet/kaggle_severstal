@@ -9,7 +9,8 @@ import torch
 from sklearn.model_selection import train_test_split
 
 
-from albumentations import Compose, Normalize, Flip, HorizontalFlip
+import albumentations as albu
+from albumentations import Compose, Normalize, Flip, ShiftScaleRotate
 from albumentations.pytorch import ToTensor
 
 
@@ -130,6 +131,27 @@ class SteelDataset(Dataset):
         return len(self.df)
 
 
+def get_hard_train_transforms(mean, std):
+    transforms = [
+        albu.OneOf([
+            albu.RandomSizedCrop(min_max_height=(200, 256), height=256, width=1600, w2h_ratio=1600 / 256, p=0.5),
+            ShiftScaleRotate(shift_limit=0.25,
+                             scale_limit=0.25,
+                             rotate_limit=90,
+                             border_mode=cv.BORDER_CONSTANT,
+                             value=0,
+                             mask_value=0),
+            ]),
+        albu.RandomBrightnessContrast(),
+        albu.RandomGamma(),
+        Flip(),
+        Normalize(mean=mean, std=std),
+        ToTensor()
+    ]
+
+    return Compose(transforms)
+
+
 def get_train_transforms(mean, std):
     transforms = [Flip(),
                   Normalize(mean=mean, std=std),
@@ -170,14 +192,18 @@ def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
 
 
 def get_train_val_datasets(df, data_folder=None, mean=None, std=None,
-                           catalyst=True, binary=False, full_train=False):
+                           catalyst=True, binary=False, full_train=False,
+                           hard_transforms=False):
     if isinstance(df, str):
         df = read_dataset(df, data_folder)
 
     train_df, val_df = train_test_split(df, test_size=0.2,
                                         stratify=df["defects"])
 
-    train_transforms = get_train_transforms(mean, std)
+    if hard_transforms:
+        train_transforms = get_hard_train_transforms(mean, std)
+    else:
+        train_transforms = get_train_transforms(mean, std)
     val_transforms = get_inference_transforms(mean, std)
 
     if full_train:
@@ -200,8 +226,10 @@ def get_train_val_dataloaders(
         pin_memory=False,
         binary=False,
         full_train=False,
+        hard_transforms=False,
 ):
-    train_dataset, val_dataset = get_train_val_datasets(df, data_folder, mean, std, catalyst, binary=binary, full_train=full_train)
+    train_dataset, val_dataset = get_train_val_datasets(df, data_folder, mean, std, catalyst, binary=binary, full_train=full_train,
+                                                        hard_transforms=hard_transforms)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=batch_size,
