@@ -197,7 +197,7 @@ def get_train_val_datasets(df, data_folder=None, mean=None, std=None,
     if isinstance(df, str):
         df = read_dataset(df, data_folder)
 
-    train_df, val_df = train_test_split(df, test_size=0.2,
+    train_df, val_df = train_test_split(df, test_size=0.05,
                                         stratify=df["defects"])
 
     if hard_transforms:
