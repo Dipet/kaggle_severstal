@@ -5,6 +5,8 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import segmentation_models_pytorch as smp
+from ternausnet.models import UNet16
+import cv2 as cv
 
 
 def find_best_threshold(range, model, dataloader):
@@ -29,6 +31,54 @@ def find_best_threshold(range, model, dataloader):
     return result
 
 
+def post_process(probability, threshold, min_size):
+    '''Post processing of each predicted mask, components with lesser number of pixels
+    than `min_size` are ignored'''
+    mask = cv.threshold(probability, threshold, 1, cv.THRESH_BINARY)[1]
+    num_component, component = cv.connectedComponents(mask.astype(np.uint8))
+    predictions = np.zeros((256, 1600), np.float32)
+    num = 0
+    for c in range(1, num_component):
+        p = (component == c)
+        if p.sum() > min_size:
+            predictions[p] = 1
+            num += 1
+    return predictions
+
+
+def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloader):
+    dice = {}
+    for p in proba_range:
+        for a in area_range:
+            dice[(p, a)] = []
+
+    metric = DiceCallback(threshold=0)
+
+    for images, masks in tqdm(dataloader, total=len(dataloader)):
+        masks = masks.cuda()
+        images = images.cuda()
+        result = model(images)
+        result = result.detach()
+        for key in list(dice.keys()):
+            proba, area = key
+
+            result = result.detach().cpu().numpy()
+            masks = masks.detach().cpu()
+
+            result = post_process(result, proba, area)
+            result = torch.from_numpy(result)
+
+            dice[key].append(metric.dice(result, masks))
+
+    dice = [(key, np.mean(item)) for key, item in dice.items()]
+    dice = sorted(dice, reverse=True, key=lambda x: x[1])
+
+    result = dice[0][0]
+    print(f'Best threshold: {dice[0][0]}: {dice[0][1]:.5f}')
+
+    return result
+
+
 if __name__ == '__main__':
     # Get dataset
     transforms = get_inference_transforms(mean=(0.485, 0.456, 0.406),
@@ -36,7 +86,7 @@ if __name__ == '__main__':
 
     df = read_dataset('../dataset/train.csv',
                       '../dataset/train_images',)
-    df = df.sample(500)
+    df = df.sample(10000)
     dataloader = get_dataloader(df, transforms,
                                 batch_size=6,
                                 shuffle=False,
@@ -47,12 +97,16 @@ if __name__ == '__main__':
                                 binary=False)
 
     # Load model
-    model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
-    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_full_200/checkpoints/best.pth')
+    # model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
+    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_full_200/checkpoints/best.pth')
+    model = UNet16(4, pretrained=True).cuda().eval()
+    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
     model.load_state_dict(state['model_state_dict'])
     del state
     model = model.eval()
 
 
     # Find best threshold
-    best_thres = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
+    best_thres = find_best_threshold_area_and_proba(np.arange(0.05, 1, 0.05),
+                                                    np.arange(1000, 5000, 500),
+                                                    model, dataloader)

@@ -13,13 +13,13 @@ from ternausnet.models import UNet16, AlbuNet
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.5.ternausnet'
+NAME = '1.5.albunet'
 logdir = f"./logdir/{NAME}"
 num_epochs = 50
 
 FP16 = True
 
-batch_size = 6
+batch_size = 4
 default_batch_size = 8
 
 lr = 1e-4 * batch_size / default_batch_size
@@ -38,15 +38,15 @@ train, val = get_train_val_dataloaders(df='dataset/train.csv',
 loaders = {"train": train, "valid": val}
 
 # Model
-model = UNet16(4, pretrained=True)
+model = AlbuNet(4, pretrained=True)
 
-# Optimizer
+# # Optimizer
 criterion = nn.BCEWithLogitsLoss()
 # criterion = smp.utils.losses.DiceLoss()
 optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
 
-# Train
+# # Train
 runner = SupervisedRunner()
 runner.train(
     model=model,
@@ -65,13 +65,25 @@ runner.train(
     ],
     fp16=FP16,
 )
+del runner, criterion, optimizer, scheduler, model, train
+
+import torch
+import os
+
+torch.cuda.empty_cache()
+
+model = UNet16(4, pretrained=True)
+state = torch.load(os.path.join(logdir, 'checkpoints/best.pth'))
+model.load_state_dict(state['model_state_dict'])
+del state
 
 # Train on valid
 # Optimizer
 criterion = nn.BCEWithLogitsLoss()
 # criterion = smp.utils.losses.DiceLoss()
-optimizer = Adam(model.parameters(), lr=lr / 100, weight_decay=weight_decay)
+optimizer = Adam(model.parameters(), lr=lr / 50, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
+runner = SupervisedRunner()
 runner.train(
     model=model,
     criterion=criterion,
@@ -79,7 +91,7 @@ runner.train(
     scheduler=scheduler,
     loaders={"train": val, "valid": val},
     logdir=logdir,
-    num_epochs=10,
+    num_epochs=5,
     verbose=True,
     callbacks=[
         DiceCallback(threshold=0.5, prefix='catalyst_dice'),
