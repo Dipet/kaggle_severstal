@@ -62,16 +62,17 @@ def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloade
 
     metric = DiceCallback(threshold=0)
 
+    sigmoid = torch.nn.Sigmoid()
+
     for images, masks in tqdm(dataloader, total=len(dataloader)):
         masks = masks.cuda()
         images = images.cuda()
         result = model(images)
-        result = result.detach()
+        result = sigmoid(result)
+        result = result.detach().cpu().numpy()
+        masks = masks.detach().cpu()
         for key in list(dice.keys()):
             proba, area = key
-
-            result = result.detach().cpu().numpy()
-            masks = masks.detach().cpu()
 
             _result = []
             for r in result:
@@ -80,10 +81,10 @@ def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloade
                     _r.append(post_process(i, proba, area))
                 _r = np.stack(_r, axis=0)
                 _result.append(_r)
-            result = np.stack(_result, axis=0)
-            result = torch.from_numpy(result)
+            _result = np.stack(_result, axis=0)
+            _result = torch.from_numpy(_result)
 
-            dice[key].append(metric.dice(result, masks))
+            dice[key].append(metric.dice(_result, masks, threshold=proba, activation=None))
 
     dice = [(key, np.mean(item)) for key, item in dice.items()]
     dice = sorted(dice, reverse=True, key=lambda x: x[1])
@@ -124,6 +125,6 @@ if __name__ == '__main__':
     # Find best threshold
     b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
     b = 0.4
-    best_thres = find_best_threshold_area_and_proba(np.arange(b - 0.05, b + 0.1, 0.05),
-                                                    np.arange(1000, 5000, 500),
+    best_thres = find_best_threshold_area_and_proba(np.arange(b - 0.05, b + 0.15, 0.05),
+                                                    np.arange(0, 5000, 500),
                                                     model, dataloader)
