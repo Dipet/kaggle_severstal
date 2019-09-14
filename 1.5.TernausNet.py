@@ -72,7 +72,7 @@ import os
 
 torch.cuda.empty_cache()
 
-model = UNet16(4, pretrained=True)
+model = AlbuNet(4, pretrained=True)
 state = torch.load(os.path.join(logdir, 'checkpoints/best.pth'))
 model.load_state_dict(state['model_state_dict'])
 del state

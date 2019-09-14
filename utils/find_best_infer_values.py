@@ -45,6 +45,14 @@ def post_process(probability, threshold, min_size):
             num += 1
     return predictions
 
+from joblib import Parallel, delayed
+
+def _post_proc(result, thres, min_size):
+    r = []
+    for i in result:
+        r.append(post_process(i, thres, min_size))
+    return np.stack(r, axis=0)
+
 
 def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloader):
     dice = {}
@@ -65,7 +73,14 @@ def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloade
             result = result.detach().cpu().numpy()
             masks = masks.detach().cpu()
 
-            result = post_process(result, proba, area)
+            _result = []
+            for r in result:
+                _r = []
+                for i in r:
+                    _r.append(post_process(i, proba, area))
+                _r = np.stack(_r, axis=0)
+                _result.append(_r)
+            result = np.stack(_result, axis=0)
             result = torch.from_numpy(result)
 
             dice[key].append(metric.dice(result, masks))
@@ -86,7 +101,7 @@ if __name__ == '__main__':
 
     df = read_dataset('../dataset/train.csv',
                       '../dataset/train_images',)
-    df = df.sample(10000)
+    df = df.sample(10)
     dataloader = get_dataloader(df, transforms,
                                 batch_size=6,
                                 shuffle=False,
@@ -97,16 +112,18 @@ if __name__ == '__main__':
                                 binary=False)
 
     # Load model
-    # model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
-    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_full_200/checkpoints/best.pth')
-    model = UNet16(4, pretrained=True).cuda().eval()
-    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
+    model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
+    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_hard_transforms/checkpoints/best.pth')
+    # model = UNet16(4, pretrained=True).cuda().eval()
+    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
     model.load_state_dict(state['model_state_dict'])
     del state
     model = model.eval()
 
 
     # Find best threshold
-    best_thres = find_best_threshold_area_and_proba(np.arange(0.05, 1, 0.05),
+    b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
+    b = 0.4
+    best_thres = find_best_threshold_area_and_proba(np.arange(b - 0.05, b + 0.1, 0.05),
                                                     np.arange(1000, 5000, 500),
                                                     model, dataloader)

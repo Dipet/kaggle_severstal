@@ -13,14 +13,14 @@ import segmentation_models_pytorch as smp
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.se_resnet152'
+NAME = '1.1.resnet50_hard_transforms'
 logdir = f"./logdir/{NAME}"
 num_epochs = 200
-encoder = 'se_resnet152'
+encoder = 'resnet50'
 
 FP16 = True
 
-batch_size = 4
+batch_size = 8
 default_batch_size = 8
 
 lr = 1e-4 * batch_size / default_batch_size
@@ -35,7 +35,8 @@ train, val = get_train_val_dataloaders(df='dataset/train.csv',
                                        batch_size=batch_size,
                                        num_workers=6,
                                        pin_memory=False,
-                                       full_train=False)
+                                       full_train=False,
+                                       hard_transforms=True)
 loaders = {"train": train, "valid": val}
 
 # Model
@@ -49,14 +50,50 @@ scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
 
 # Train
 runner = SupervisedRunner()
+# runner.train(
+#     model=model,
+#     criterion=criterion,
+#     optimizer=optimizer,
+#     scheduler=scheduler,
+#     loaders=loaders,
+#     logdir=logdir,
+#     num_epochs=num_epochs,
+#     verbose=True,
+#     callbacks=[
+#         DiceCallback(threshold=0.5, prefix='catalyst_dice'),
+#         IouCallback(threshold=0.5, prefix='catalyst_iou'),
+#         MyDiceCallbak(threshold=0.5),
+#         MyIouCallback(threshold=0.5),
+#     ],
+#     fp16=FP16,
+# )
+del runner, model, criterion, scheduler, optimizer
+
+import torch
+import os
+
+torch.cuda.empty_cache()
+
+model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
+state = torch.load(os.path.join(logdir, 'checkpoints/best.pth'))
+model.load_state_dict(state['model_state_dict'])
+del state
+
+# Train on valid
+# Optimizer
+criterion = nn.BCEWithLogitsLoss()
+# criterion = smp.utils.losses.DiceLoss()
+optimizer = Adam(model.parameters(), lr=lr / 50, weight_decay=weight_decay)
+scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
+runner = SupervisedRunner()
 runner.train(
     model=model,
     criterion=criterion,
     optimizer=optimizer,
     scheduler=scheduler,
-    loaders=loaders,
+    loaders={"train": val, "valid": val},
     logdir=logdir,
-    num_epochs=num_epochs,
+    num_epochs=5,
     verbose=True,
     callbacks=[
         DiceCallback(threshold=0.5, prefix='catalyst_dice'),
