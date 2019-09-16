@@ -8,6 +8,10 @@ import segmentation_models_pytorch as smp
 from ternausnet.models import UNet16
 import cv2 as cv
 
+from joblib import Parallel, delayed
+
+import itertools
+
 
 def find_best_threshold(range, model, dataloader):
     dice = {i: [] for i in range}
@@ -45,13 +49,28 @@ def post_process(probability, threshold, min_size):
             num += 1
     return predictions
 
-from joblib import Parallel, delayed
 
 def _post_proc(result, thres, min_size):
     r = []
     for i in result:
         r.append(post_process(i, thres, min_size))
     return np.stack(r, axis=0)
+
+
+def func(result, masks, keys, metric=DiceCallback(threshold=0)):
+    result_d = {key: [] for key in keys}
+
+    for key in keys:
+        proba, area = key
+        _result = []
+        for r in result:
+            _result.append(post_process(r, proba, area))
+        _result = np.stack(_result, axis=0)
+        _result = torch.from_numpy(_result)
+
+        result_d[key].append(metric.dice(_result, masks, threshold=proba, activation=None))
+
+    return result_d
 
 
 def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloader):
@@ -71,26 +90,40 @@ def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloade
         result = sigmoid(result)
         result = result.detach().cpu().numpy()
         masks = masks.detach().cpu()
-        for key in list(dice.keys()):
-            proba, area = key
 
-            _result = []
+        keys = list(dice.keys())
+
+        result = Parallel(n_jobs=len(images))(delayed(func)(r, m, keys) for r, m in zip(result, masks))
+
+        for key in keys:
             for r in result:
-                _r = []
-                for i in r:
-                    _r.append(post_process(i, proba, area))
-                _r = np.stack(_r, axis=0)
-                _result.append(_r)
-            _result = np.stack(_result, axis=0)
-            _result = torch.from_numpy(_result)
+                dice[key] += r[key]
 
-            dice[key].append(metric.dice(_result, masks, threshold=proba, activation=None))
+        # for key in list(dice.keys()):
+        #     proba, area = key
+        #
+        #     _result = []
+        #     for r in result:
+        #         # _r = []
+        #         # for i in r:
+        #         #     _r.append(post_process(i, proba, area))
+        #         # _r = np.stack(_r, axis=0)
+        #         _r = Parallel(n_jobs=len(result))(delayed(post_process)(i, proba, area) for i in r)
+        #         _result.append(_r)
+        #     _result = np.stack(_result, axis=0)
+        #     _result = torch.from_numpy(_result)
+        #
+        #     dice[key].append(metric.dice(_result, masks, threshold=proba, activation=None))
 
     dice = [(key, np.mean(item)) for key, item in dice.items()]
     dice = sorted(dice, reverse=True, key=lambda x: x[1])
 
-    result = dice[0][0]
-    print(f'Best threshold: {dice[0][0]}: {dice[0][1]:.5f}')
+    result = dice[0][1]
+
+    for key, val in dice.items():
+        if val < result:
+            break
+        print(f'Best threshold: {key}: {result:.5f}')
 
     return result
 
@@ -102,7 +135,7 @@ if __name__ == '__main__':
 
     df = read_dataset('../dataset/train.csv',
                       '../dataset/train_images',)
-    df = df.sample(10)
+    # df = df.sample(10)
     dataloader = get_dataloader(df, transforms,
                                 batch_size=6,
                                 shuffle=False,
@@ -123,8 +156,8 @@ if __name__ == '__main__':
 
 
     # Find best threshold
-    b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
+    # b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
     b = 0.4
-    best_thres = find_best_threshold_area_and_proba(np.arange(b - 0.05, b + 0.15, 0.05),
-                                                    np.arange(0, 5000, 500),
+    best_thres = find_best_threshold_area_and_proba([b],
+                                                    np.arange(1000, 5001, 500),
                                                     model, dataloader)
