@@ -10,12 +10,14 @@ from catalyst.utils import set_global_seed, prepare_cudnn
 
 import segmentation_models_pytorch as smp
 
+from utils.losses import ComboLoss
+
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.resnet50_hard_transforms'
+NAME = '1.1.resnet50_hard_transforms_combo_loss'
 logdir = f"./logdir/{NAME}"
-num_epochs = 200
+num_epochs = 50
 encoder = 'resnet50'
 
 FP16 = True
@@ -43,30 +45,35 @@ loaders = {"train": train, "valid": val}
 model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None)
 
 # Optimizer
-criterion = nn.BCEWithLogitsLoss()
+# criterion = nn.BCEWithLogitsLoss()
+criterion = ComboLoss(weights={'bce': 0.3,
+                               'dice': 0.3,
+                               'focal': 0.3,
+                               },
+                      channel_weights=[1] * 4)
 # criterion = smp.utils.losses.DiceLoss()
 optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
 
 # Train
 runner = SupervisedRunner()
-# runner.train(
-#     model=model,
-#     criterion=criterion,
-#     optimizer=optimizer,
-#     scheduler=scheduler,
-#     loaders=loaders,
-#     logdir=logdir,
-#     num_epochs=num_epochs,
-#     verbose=True,
-#     callbacks=[
-#         DiceCallback(threshold=0.5, prefix='catalyst_dice'),
-#         IouCallback(threshold=0.5, prefix='catalyst_iou'),
-#         MyDiceCallbak(threshold=0.5),
-#         MyIouCallback(threshold=0.5),
-#     ],
-#     fp16=FP16,
-# )
+runner.train(
+    model=model,
+    criterion=criterion,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    loaders=loaders,
+    logdir=logdir,
+    num_epochs=num_epochs,
+    verbose=True,
+    callbacks=[
+        DiceCallback(threshold=0.5, prefix='catalyst_dice'),
+        IouCallback(threshold=0.5, prefix='catalyst_iou'),
+        MyDiceCallbak(threshold=0.5),
+        MyIouCallback(threshold=0.5),
+    ],
+    fp16=FP16,
+)
 del runner, model, criterion, scheduler, optimizer
 
 import torch
@@ -81,7 +88,12 @@ del state
 
 # Train on valid
 # Optimizer
-criterion = nn.BCEWithLogitsLoss()
+# criterion = nn.BCEWithLogitsLoss()
+criterion = ComboLoss(weights={'bce': 1,
+                               'dice': 1,
+                               'focal': 1,
+                               },
+                      channel_weights=[1] * 4)
 # criterion = smp.utils.losses.DiceLoss()
 optimizer = Adam(model.parameters(), lr=lr / 50, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)

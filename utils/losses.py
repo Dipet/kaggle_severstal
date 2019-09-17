@@ -296,7 +296,13 @@ class FocalLoss2d(nn.Module):
     def forward(self, outputs, targets):
         outputs = outputs.contiguous()
         targets = targets.contiguous()
-        eps = 1e-8
+
+        if outputs.dtype == torch.float32:
+            eps = 1e-8
+        elif outputs.dtype == torch.float64:
+            eps = 1e-16
+        else:
+            eps = 1e-4
         non_ignored = targets.view(-1) != self.ignore_index
         targets = targets.view(-1)[non_ignored].float()
         outputs = outputs.contiguous().view(-1)[non_ignored]
