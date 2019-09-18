@@ -20,13 +20,13 @@ import os
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.2.resnet50_binary_diceloss'
+NAME = '1.2.resnet50_binary_hard_transforms'
 LOGDIR = f"./logdir/{NAME}"
 
 # Train binary
 # ------------------------------------------------------------------------------
 logdir = os.path.join(LOGDIR, 'binary/')
-num_epochs = 20
+num_epochs = 40
 
 FP16 = True
 
@@ -41,7 +41,6 @@ mean = (0.485, 0.456, 0.406)
 std = (0.229, 0.224, 0.225)
 num_workers = 6
 
-
 model = mobilenetv3(1)
 
 # Dataloaders
@@ -52,7 +51,8 @@ train, val = get_train_val_dataloaders(df='dataset/train.csv',
                                        batch_size=batch_size,
                                        num_workers=num_workers,
                                        pin_memory=False,
-                                       binary=True)
+                                       binary=True,
+                                       hard_transforms=True)
 loaders = {"train": train, "valid": val}
 
 # Optimizer
@@ -77,43 +77,9 @@ runner.train(
     ],
     fp16=FP16,
 )
+del model, train, val, criterion, optimizer, scheduler, runner
 # ------------------------------------------------------------------------------
 
-
-# Prepare data for segmentation
-# ==============================================================================
-df = read_dataset('dataset/train.csv', 'dataset/train_images')
-dataloader = get_dataloader(df, get_inference_transforms(mean, std),
-                            batch_size=batch_size,
-                            shuffle=False,
-                            num_workers=num_workers,
-                            phase='valid',
-                            catalyst=False,
-                            pin_memory=False,
-                            binary=True)
-
-results = runner.predict_loader(dataloader, resume=os.path.join(logdir, "checkpoints/best.pth"))
-results = torch.from_numpy(results)
-
-labels = []
-for images, label in tqdm(dataloader, total=len(dataloader), desc='Inference binary'):
-    labels.append(label)
-labels = torch.cat(labels)
-
-thresholds = {}
-for i in np.arange(0.05, 1, 0.05):
-    accuracy = AccuracyCallback.accuracy(results, labels, threshold=i)
-    thresholds[i] = accuracy
-
-thresholds = list(thresholds.items())
-best_threshold = sorted(thresholds, reverse=True, key=lambda x: x[1])[0][0]
-
-df = df.loc[(results > best_threshold).numpy().flatten()]
-
-print(best_threshold)
-with open(os.path.join(logdir, 'best_thres.txt'), 'w') as file:
-    file.write(str(best_threshold))
-# ==============================================================================
 
 # Train segmentation
 # ------------------------------------------------------------------------------
@@ -131,12 +97,16 @@ weight_decay = 1e-5
 momentum = 0.9
 
 # Dataloaders
-train, val = get_train_val_dataloaders(df=df,
-                                       mean=(0.485, 0.456, 0.406),
-                                       std=(0.229, 0.224, 0.225),
+train, val = get_train_val_dataloaders(df='dataset/train.csv',
+                                       data_folder='dataset/train_images',
+                                       mean=mean,
+                                       std=std,
                                        batch_size=batch_size,
-                                       num_workers=6,
-                                       pin_memory=False)
+                                       num_workers=num_workers,
+                                       pin_memory=False,
+                                       binary=False,
+                                       hard_transforms=True,
+                                       only_has_mask=True)
 loaders = {"train": train, "valid": val}
 
 # Model
@@ -144,7 +114,7 @@ model = smp.Unet(encoder, encoder_weights='imagenet', classes=4, activation=None
 
 # Optimizer
 # criterion = nn.BCEWithLogitsLoss()
-criterion = smp.utils.losses.DiceLoss()
+criterion = nn.BCEWithLogitsLoss()
 optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 scheduler = ReduceLROnPlateau(optimizer, mode="min", patience=3, verbose=True)
 
@@ -156,6 +126,26 @@ runner.train(
     optimizer=optimizer,
     scheduler=scheduler,
     loaders=loaders,
+    logdir=logdir,
+    num_epochs=num_epochs,
+    verbose=True,
+    callbacks=[
+        DiceCallback(threshold=0.5, prefix='catalyst_dice'),
+        IouCallback(threshold=0.5, prefix='catalyst_iou'),
+        MyDiceCallbak(threshold=0.5),
+        MyIouCallback(threshold=0.5),
+    ],
+    fp16=FP16,
+)
+
+del train
+
+runner.train(
+    model=model,
+    criterion=criterion,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    loaders={"train": val, "valid": val},
     logdir=logdir,
     num_epochs=num_epochs,
     verbose=True,

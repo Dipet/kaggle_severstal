@@ -193,9 +193,12 @@ def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
 
 def get_train_val_datasets(df, data_folder=None, mean=None, std=None,
                            catalyst=True, binary=False, full_train=False,
-                           hard_transforms=False):
+                           hard_transforms=False, only_has_mask=False):
     if isinstance(df, str):
         df = read_dataset(df, data_folder)
+
+    if only_has_mask:
+        df = df.dropna(subset=[1, 2, 3, 4], how='all')
 
     train_df, val_df = train_test_split(df, test_size=0.05,
                                         stratify=df["defects"])
@@ -227,9 +230,10 @@ def get_train_val_dataloaders(
         binary=False,
         full_train=False,
         hard_transforms=False,
+        only_has_mask=False,
 ):
     train_dataset, val_dataset = get_train_val_datasets(df, data_folder, mean, std, catalyst, binary=binary, full_train=full_train,
-                                                        hard_transforms=hard_transforms)
+                                                        hard_transforms=hard_transforms, only_has_mask=only_has_mask)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=batch_size,

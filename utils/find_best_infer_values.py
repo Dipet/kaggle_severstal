@@ -39,6 +39,8 @@ def post_process(probability, threshold, min_size):
     '''Post processing of each predicted mask, components with lesser number of pixels
     than `min_size` are ignored'''
     mask = cv.threshold(probability, threshold, 1, cv.THRESH_BINARY)[1]
+    # kernel = cv.getStructuringElement(cv.MORPH_RECT, (5, 5))
+    # mask = cv.morphologyEx(mask, cv.MORPH_CLOSE, kernel, borderType=cv.BORDER_CONSTANT, borderValue=0)
     num_component, component = cv.connectedComponents(mask.astype(np.uint8))
     predictions = np.zeros((256, 1600), np.float32)
     num = 0
@@ -50,11 +52,18 @@ def post_process(probability, threshold, min_size):
     return predictions
 
 
-def _post_proc(result, thres, min_size):
-    r = []
-    for i in result:
-        r.append(post_process(i, thres, min_size))
-    return np.stack(r, axis=0)
+def remove_overlap(result):
+    _result = result.copy()
+
+    for i, r0 in enumerate(_result):
+        for r1 in _result[i+1:]:
+            diff = r0 - r1
+
+            cond = diff != r0
+            r0[cond & (diff < 0)] = 0
+            r1[cond & (diff > 0)] = 0
+
+    return _result
 
 
 def func(result, masks, keys, metric=DiceCallback(threshold=0)):
@@ -63,6 +72,9 @@ def func(result, masks, keys, metric=DiceCallback(threshold=0)):
     for key in keys:
         proba, area = key
         _result = []
+
+        result = remove_overlap(result)
+
         for r in result:
             _result.append(post_process(r, proba, area))
         _result = np.stack(_result, axis=0)
@@ -78,8 +90,6 @@ def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloade
     for p in proba_range:
         for a in area_range:
             dice[(p, a)] = []
-
-    metric = DiceCallback(threshold=0)
 
     sigmoid = torch.nn.Sigmoid()
 
@@ -99,28 +109,12 @@ def find_best_threshold_area_and_proba(proba_range, area_range, model, dataloade
             for r in result:
                 dice[key] += r[key]
 
-        # for key in list(dice.keys()):
-        #     proba, area = key
-        #
-        #     _result = []
-        #     for r in result:
-        #         # _r = []
-        #         # for i in r:
-        #         #     _r.append(post_process(i, proba, area))
-        #         # _r = np.stack(_r, axis=0)
-        #         _r = Parallel(n_jobs=len(result))(delayed(post_process)(i, proba, area) for i in r)
-        #         _result.append(_r)
-        #     _result = np.stack(_result, axis=0)
-        #     _result = torch.from_numpy(_result)
-        #
-        #     dice[key].append(metric.dice(_result, masks, threshold=proba, activation=None))
-
     dice = [(key, np.mean(item)) for key, item in dice.items()]
     dice = sorted(dice, reverse=True, key=lambda x: x[1])
 
     result = dice[0][1]
 
-    for key, val in dice.items():
+    for key, val in dice:
         if val < result:
             break
         print(f'Best threshold: {key}: {result:.5f}')
@@ -147,7 +141,7 @@ if __name__ == '__main__':
 
     # Load model
     model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
-    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_hard_transforms/checkpoints/best.pth')
+    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_hard_transforms_combo_loss/checkpoints/best.pth')
     # model = UNet16(4, pretrained=True).cuda().eval()
     # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
     model.load_state_dict(state['model_state_dict'])
@@ -157,7 +151,7 @@ if __name__ == '__main__':
 
     # Find best threshold
     # b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
-    b = 0.4
+    b = 0.6
     best_thres = find_best_threshold_area_and_proba([b],
                                                     np.arange(1000, 5001, 500),
                                                     model, dataloader)
