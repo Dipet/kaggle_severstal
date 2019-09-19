@@ -138,7 +138,9 @@ runner.train(
     fp16=FP16,
 )
 
-del train
+del train, optimizer
+
+optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
 runner.train(
     model=model,

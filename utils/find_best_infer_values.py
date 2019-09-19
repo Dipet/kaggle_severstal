@@ -1,5 +1,5 @@
 from utils.dataset import get_dataloader, get_inference_transforms, read_dataset
-from utils.callbacks import DiceCallback
+from utils.callbacks import DiceCallback, AccuracyCallback
 
 import torch
 import numpy as np
@@ -10,7 +10,7 @@ import cv2 as cv
 
 from joblib import Parallel, delayed
 
-import itertools
+from utils.mobilenetv3 import mobilenetv3
 
 
 def find_best_threshold(range, model, dataloader):
@@ -31,6 +31,27 @@ def find_best_threshold(range, model, dataloader):
 
     result = dice[0][0]
     print(f'Best threshold: {dice[0][0]}: {dice[0][1]:.5f}')
+
+    return result
+
+
+def find_best_threshold_binary(range, model, dataloader):
+    accuracy = {i: [] for i in range}
+    metric = AccuracyCallback(threshold=0)
+
+    for images, targets in tqdm(dataloader, total=len(dataloader)):
+        targets = targets.cuda()
+        images = images.cuda()
+        result =  torch.sigmoid(model(images))
+        result = result.detach()
+        for threshold in list(accuracy.keys()):
+            accuracy[threshold].append(metric.accuracy(result, targets, threshold=threshold).cpu().numpy())
+
+    accuracy = [(key, np.mean(item)) for key, item in accuracy.items()]
+    accuracy = sorted(accuracy, reverse=True, key=lambda x: x[1])
+
+    result = accuracy[0][0]
+    print(f'Best threshold: {accuracy[0][0]}: {accuracy[0][1]:.5f}')
 
     return result
 
@@ -129,29 +150,51 @@ if __name__ == '__main__':
 
     df = read_dataset('../dataset/train.csv',
                       '../dataset/train_images',)
+
     # df = df.sample(10)
     dataloader = get_dataloader(df, transforms,
-                                batch_size=6,
+                                batch_size=8,
                                 shuffle=False,
                                 num_workers=6,
                                 phase='valid',
                                 catalyst=False,
                                 pin_memory=False,
-                                binary=False)
+                                binary=True)
 
-    # Load model
-    model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
-    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_hard_transforms_combo_loss/checkpoints/best.pth')
-    # model = UNet16(4, pretrained=True).cuda().eval()
-    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
+    model = mobilenetv3(1).cuda().eval()
+    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.2.resnet50_binary_hard_transforms/binary/checkpoints/best.pth')
     model.load_state_dict(state['model_state_dict'])
     del state
     model = model.eval()
+    find_best_threshold_binary(np.arange(0.05, 1, 0.05), model, dataloader)
 
+    # ------------------------------------------------------------------------------------------------------------------------------------------
 
-    # Find best threshold
+    # df = read_dataset('../dataset/train.csv',
+    #                   '../dataset/train_images', )
+    # df = df.dropna(subset=[1, 2, 3, 4], how='all')
+    # dataloader = get_dataloader(df, transforms,
+    #                             batch_size=6,
+    #                             shuffle=False,
+    #                             num_workers=6,
+    #                             phase='valid',
+    #                             catalyst=False,
+    #                             pin_memory=False,
+    #                             binary=True)
+    #
+    #
+    # # Load model
+    # model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None).cuda().eval()
+    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.2.resnet50_binary_hard_transforms/seg/checkpoints/best.pth')
+    # # model = UNet16(4, pretrained=True).cuda().eval()
+    # # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
+    # model.load_state_dict(state['model_state_dict'])
+    # del state
+    # model = model.eval()
+    #
+    # # Find best threshold
     # b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader)
-    b = 0.6
-    best_thres = find_best_threshold_area_and_proba([b],
-                                                    np.arange(1000, 5001, 500),
-                                                    model, dataloader)
+    # b = 0.6
+    # best_thres = find_best_threshold_area_and_proba([b],
+    #                                                 np.arange(1000, 5001, 500),
+    #                                                 model, dataloader)
