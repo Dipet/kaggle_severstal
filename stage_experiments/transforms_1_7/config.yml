@@ -32,9 +32,11 @@ stages:
     catalyst_dice:
       callback: DiceCallback
       threshold: 0.5
+      prefix: catalyst_dice
     catalyst_iou:
       callback: IouCallback
       threshold: 0.5
+      prefix: catalyst_iou
     dice:
       callback: MyDice
       threshold: 0.5
