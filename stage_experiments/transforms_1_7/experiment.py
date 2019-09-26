@@ -65,7 +65,8 @@ class Experiment(ConfigExperiment):
         df = read_dataset('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/dataset/train.csv',
                           '/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/dataset/train_images')
 
-        train, test = train_test_split(df, test_size=0.05)
+        train, test = train_test_split(df, test_size=0.05,
+                                       stratify=df["defects"])
 
         trainset = SteelDataset(train, self.get_transforms(stage, mode='train'),
                                 phase='train', catalyst=True, binary=False, multi=False)
