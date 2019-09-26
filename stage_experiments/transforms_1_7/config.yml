@@ -1,0 +1,84 @@
+model_params:
+  model: Model
+
+
+args:
+  expdir: "/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/stage_experiments/transforms_1_7"
+  logdir: "/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/logdir/1.1.resnet50_stages_transforms"
+
+distributed_params:
+  opt_level: O1
+
+stages:
+
+  data_params:
+    batch_size: 8
+    num_workers: 8
+
+  criterion_params:
+    criterion: BCEWithLogitsLoss
+
+  scheduler_params:
+    scheduler: ReduceLROnPlateau
+    mode: min
+    patience: 3
+    verbose: True
+
+  callbacks_params:
+    loss:
+      callback: CriterionCallback
+    optimizer:
+      callback: OptimizerCallback
+    catalyst_dice:
+      callback: DiceCallback
+      threshold: 0.5
+    catalyst_iou:
+      callback: IouCallback
+      threshold: 0.5
+    dice:
+      callback: MyDice
+      threshold: 0.5
+    iou:
+      callback: MyIOU
+      threshold: 0.5
+    scheduler:
+      callback: SchedulerCallback
+    saver:
+      callback: CheckpointCallback
+
+  stage1:
+
+    state_params:
+      num_epochs: 20
+
+    optimizer_params:
+      optimizer: Adam
+
+      lr_linear_scaling:
+        lr: 0.001
+        base_batch_size: 8
+      weight_decay: 0.00001
+
+  stage2:
+    state_params:
+      num_epochs: 10
+
+      optimizer_params:
+        optimizer: Adam
+
+        lr_linear_scaling:
+          lr: 0.0001
+          base_batch_size: 8
+        weight_decay: 0.00001
+
+  stage3:
+    state_params:
+      num_epochs: 5
+
+      optimizer_params:
+        optimizer: Adam
+
+        lr_linear_scaling:
+          lr: 0.00001
+          base_batch_size: 8
+        weight_decay: 0.00001

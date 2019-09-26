@@ -15,7 +15,7 @@ from utils.losses import ComboLoss
 prepare_cudnn(True, True)
 set_global_seed(0)
 
-NAME = '1.1.resnet50_hard_transforms_combo_loss'
+NAME = '1.1.resnet50_hard_transforms_stages'
 logdir = f"./logdir/{NAME}"
 num_epochs = 50
 encoder = 'resnet50'

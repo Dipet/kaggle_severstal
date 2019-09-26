@@ -190,5 +190,5 @@ class AccuracyCallback(MetricCallback):
         if threshold is not None:
             outputs = (outputs > threshold).float()
 
-        eq = (outputs == targets).long().float().sum()
+        eq = (outputs.long() == targets.long()).long().float().sum()
         return eq / (targets.view(-1).size(0) + eps)

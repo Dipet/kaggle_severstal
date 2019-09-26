@@ -41,12 +41,13 @@ def rle_to_mask(rle):
 
 
 class SteelDataset(Dataset):
-    def __init__(self, df, transforms, phase='train', catalyst=True, binary=False):
+    def __init__(self, df, transforms, phase='train', catalyst=True, binary=False, multi=False):
         self.df = df
         self.transforms = transforms
         self.phase = phase
         self.catalyst = catalyst
         self.binary = binary
+        self.multi = multi
 
     def make_mask(self, row_id):
         '''Given a row index, return image_id and mask (256, 1600, 4)'''
@@ -94,6 +95,23 @@ class SteelDataset(Dataset):
         else:
             return img
 
+    def _get_multi(self, idx):
+        img, mask = self._get_train_valid(idx)
+
+        cls = []
+        for m in mask:
+            if isinstance(mask, np.ndarray):
+                cls.append(np.any(m != 0).astype(int))
+            else:
+                cls.append(torch.any(m != 0))
+
+        cls = torch.tensor(cls).float()
+
+        if self.catalyst:
+            return {'targets': cls, 'features': img}
+        else:
+            return img, cls
+
     def _get_binary(self, idx):
         img_path = self.df.iloc[idx].name
 
@@ -106,9 +124,9 @@ class SteelDataset(Dataset):
             mask = augmented['mask']  # 1x256x1600x4
 
         if isinstance(mask, np.ndarray):
-            cls = np.any(mask != 0).astype(int)
+            cls = np.any(mask != 0).astype(int).astype(float)
         else:
-            cls = torch.Tensor([torch.any(mask != 0).long()])
+            cls = torch.Tensor([torch.any(mask != 0).long().float()])
 
         if self.catalyst:
             return {'targets': cls, 'features': img}
@@ -121,6 +139,8 @@ class SteelDataset(Dataset):
 
         if self.binary:
             return self._get_binary(idx)
+        elif self.multi:
+            return self._get_multi(idx)
 
         if self.phase in ['train', 'valid', 'test']:
             return self._get_train_valid(idx)
@@ -182,8 +202,8 @@ def read_dataset(path, data_folder):
 
 
 def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
-                   phase, catalyst, pin_memory, binary):
-    dataset = SteelDataset(df, transforms, phase, catalyst, binary=binary)
+                   phase, catalyst, pin_memory, binary,multi):
+    dataset = SteelDataset(df, transforms, phase, catalyst, binary=binary, multi=multi)
     return DataLoader(dataset,
                       batch_size=batch_size,
                       shuffle=shuffle,
@@ -193,7 +213,8 @@ def get_dataloader(df, transforms, batch_size, shuffle, num_workers,
 
 def get_train_val_datasets(df, data_folder=None, mean=None, std=None,
                            catalyst=True, binary=False, full_train=False,
-                           hard_transforms=False, only_has_mask=False):
+                           hard_transforms=False, only_has_mask=False,
+                           multi=False):
     if isinstance(df, str):
         df = read_dataset(df, data_folder)
 
@@ -210,10 +231,10 @@ def get_train_val_datasets(df, data_folder=None, mean=None, std=None,
     val_transforms = get_inference_transforms(mean, std)
 
     if full_train:
-        train_dataset = SteelDataset(df, train_transforms, 'train', catalyst, binary=binary)
+        train_dataset = SteelDataset(df, train_transforms, 'train', catalyst, binary=binary, multi=multi)
     else:
-        train_dataset = SteelDataset(train_df, train_transforms, 'train', catalyst, binary=binary)
-    val_dataset = SteelDataset(val_df, val_transforms, 'valid', catalyst, binary=binary)
+        train_dataset = SteelDataset(train_df, train_transforms, 'train', catalyst, binary=binary, multi=multi)
+    val_dataset = SteelDataset(val_df, val_transforms, 'valid', catalyst, binary=binary, multi=multi)
 
     return train_dataset, val_dataset
 
@@ -231,9 +252,10 @@ def get_train_val_dataloaders(
         full_train=False,
         hard_transforms=False,
         only_has_mask=False,
+        multi=False,
 ):
     train_dataset, val_dataset = get_train_val_datasets(df, data_folder, mean, std, catalyst, binary=binary, full_train=full_train,
-                                                        hard_transforms=hard_transforms, only_has_mask=only_has_mask)
+                                                        hard_transforms=hard_transforms, only_has_mask=only_has_mask, multi=multi)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=batch_size,
