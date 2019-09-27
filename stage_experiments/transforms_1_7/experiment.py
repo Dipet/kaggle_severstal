@@ -68,8 +68,14 @@ class Experiment(ConfigExperiment):
         train, test = train_test_split(df, test_size=0.05,
                                        stratify=df["defects"])
 
-        trainset = SteelDataset(train, self.get_transforms(stage, mode='train'),
-                                phase='train', catalyst=True, binary=False, multi=False)
+        if stage == 'stage3':
+            trainset = SteelDataset(df,
+                                    self.get_transforms(stage, mode='train'),
+                                    phase='train', catalyst=True, binary=False,
+                                    multi=False)
+        else:
+            trainset = SteelDataset(train, self.get_transforms(stage, mode='train'),
+                                    phase='train', catalyst=True, binary=False, multi=False)
         testset = SteelDataset(test, self.get_transforms(stage, mode='valid'),
                                phase='valid', catalyst=True, binary=False, multi=False)
 

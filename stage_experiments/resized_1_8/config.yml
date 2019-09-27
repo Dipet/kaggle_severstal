@@ -81,34 +81,34 @@ stages:
     state_params:
       num_epochs: 20
 
-      optimizer_params:
-        optimizer: Adam
+    optimizer_params:
+      optimizer: Adam
 
-        lr_linear_scaling:
-          lr: 0.00005
-          base_batch_size: 8
-        weight_decay: 0.00001
+      lr_linear_scaling:
+        lr: 0.00005
+        base_batch_size: 8
+      weight_decay: 0.00001
 
   stage4:
     state_params:
       num_epochs: 10
 
-      optimizer_params:
-        optimizer: Adam
+    optimizer_params:
+      optimizer: Adam
 
-        lr_linear_scaling:
-          lr: 0.00001
-          base_batch_size: 8
-        weight_decay: 0.00001
+      lr_linear_scaling:
+        lr: 0.00001
+        base_batch_size: 8
+      weight_decay: 0.00001
 
   stage5:
     state_params:
       num_epochs: 5
 
-      optimizer_params:
-        optimizer: Adam
+    optimizer_params:
+      optimizer: Adam
 
-        lr_linear_scaling:
-          lr: 0.000005
-          base_batch_size: 8
-        weight_decay: 0.00001
+      lr_linear_scaling:
+        lr: 0.000005
+        base_batch_size: 8
+      weight_decay: 0.00001
