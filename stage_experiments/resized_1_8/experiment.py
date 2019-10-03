@@ -16,69 +16,33 @@ class Experiment(ConfigExperiment):
         if mode == 'valid':
             return get_inference_transforms(mean=mean, std=std)
 
+        transforms = []
         if stage == 'stage1':
-            transforms = [
-                albu.Resize(256 // 4, 1600 // 4, p=1),
-                Normalize(mean, std),
-                ToTensor()
-            ]
-            return Compose(transforms)
+            transforms += [albu.Resize(128, 512, p=1)]
         elif stage == 'stage2':
-            transforms = [
-                albu.Resize(256 // 2, 1600 // 2, p=1),
-                albu.GaussNoise(),
-                albu.ISONoise(),
-                albu.RandomBrightnessContrast(),
-                albu.RandomGamma(),
-                Flip(),
-                Normalize(mean, std),
-                ToTensor()
-            ]
-            return Compose(transforms)
-        if stage == 'stage3':
-            transforms = [
-                albu.IAAAffine(translate_percent=[-0.5, 0.5]),
-                albu.OneOf([
-                    albu.RandomSizedCrop(min_max_height=(200, 256), height=256,
-                                         width=1600, w2h_ratio=1600 / 256,
-                                         p=0.5),
-                    ShiftScaleRotate(shift_limit=0.25,
-                                     scale_limit=0.25,
-                                     rotate_limit=90,
-                                     border_mode=cv.BORDER_CONSTANT,
-                                     value=0,
-                                     mask_value=0),
-                ]),
-                albu.GaussNoise(),
-                albu.ISONoise(),
-                albu.RandomBrightnessContrast(),
-                albu.RandomGamma(),
-                Flip(),
-                Normalize(mean=mean, std=std),
-                ToTensor()
-            ]
-            return Compose(transforms)
-        elif stage == 'stage4':
-            transforms = [
-                albu.OneOf([
-                    albu.RandomSizedCrop(min_max_height=(200, 256), height=256, width=1600, w2h_ratio=1600 / 256, p=0.5),
-                    ShiftScaleRotate(shift_limit=0.25,
-                                     scale_limit=0.25,
-                                     rotate_limit=90,
-                                     border_mode=cv.BORDER_CONSTANT,
-                                     value=0,
-                                     mask_value=0),
-                ]),
-                albu.RandomBrightnessContrast(),
-                albu.RandomGamma(),
-                Flip(),
-                Normalize(mean=mean, std=std),
-                ToTensor()
-            ]
+            transforms += [albu.Resize(256, 1024, p=1)]
+        else:
+            transforms += [albu.OneOf([
+                ShiftScaleRotate(shift_limit=0.25,
+                                 scale_limit=0.25,
+                                 rotate_limit=90,
+                                 border_mode=cv.BORDER_CONSTANT,
+                                 value=0,
+                                 mask_value=0,
+                                 p=0.5),
+                albu.RandomSizedCrop(min_max_height=(200, 256), height=256,
+                                     width=1600, w2h_ratio=1600 / 256, p=0.5)
+            ])]
 
-            return Compose(transforms)
+        transforms += [
+            albu.RandomBrightnessContrast(),
+            albu.RandomGamma(),
+            Flip(),
+            Normalize(mean=mean, std=std),
+            ToTensor()
+        ]
 
-        return get_inference_transforms(mean=mean, std=std)
+        return albu.Compose(transforms)
 
     def get_datasets(self, stage: str, **kwargs):
         df = read_dataset('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/dataset/train.csv',

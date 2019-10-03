@@ -9,7 +9,7 @@ import segmentation_models_pytorch as smp
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.model = smp.Unet('resnet50', encoder_weights='imagenet', classes=4, activation=None)
+        self.model = smp.FPN('dpn131', encoder_weights='imagenet', classes=4, activation=None)
 
     def forward(self, x):
         return self.model(x)

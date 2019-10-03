@@ -153,53 +153,56 @@ if __name__ == '__main__':
     transforms = get_inference_transforms(mean=(0.485, 0.456, 0.406),
                                           std=(0.229, 0.224, 0.225),)
 
-    df = read_dataset('../dataset/train.csv',
-                      '../dataset/train_images',)
-
-    # df = df.sample(10)
-    dataloader = get_dataloader(df, transforms,
-                                batch_size=8,
-                                shuffle=False,
-                                num_workers=6,
-                                phase='valid',
-                                catalyst=False,
-                                pin_memory=False,
-                                binary=True,
-                                multi=False)
-
-    model = mobilenetv3(1).cuda().eval()
-    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.6.mobilenet_multi/binary/checkpoints/best.pth')
-    # model.load_state_dict(state['model_state_dict'])
-    # del state
-    model = model.eval()
-    find_best_threshold_binary(np.arange(0.05, 1, 0.05), model, dataloader)
-
-    # ------------------------------------------------------------------------------------------------------------------------------------------
-
     # df = read_dataset('../dataset/train.csv',
-    #                   '../dataset/train_images', )
-    # df = df.dropna(subset=[1, 2, 3, 4], how='all')
+    #                   '../dataset/train_images',)
+    #
+    # # df = df.sample(10)
     # dataloader = get_dataloader(df, transforms,
-    #                             batch_size=2,
+    #                             batch_size=8,
     #                             shuffle=False,
     #                             num_workers=6,
     #                             phase='valid',
     #                             catalyst=False,
     #                             pin_memory=False,
-    #                             binary=False)
+    #                             binary=True,
+    #                             multi=False)
     #
-    # # Load model
-    # model = smp.Unet('se_resnext101_32x4d', encoder_weights=None, classes=4, activation=None)
-    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.2.se_resnext101/seg/checkpoints/best.pth')
-    # # model = UNet16(4, pretrained=True).cuda().eval()
-    # # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
-    # model.load_state_dict(state['model_state_dict'])
-    # model.cuda().eval()
-    # del state
+    # model = mobilenetv3(1).cuda().eval()
+    # # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.6.mobilenet_multi/binary/checkpoints/best.pth')
+    # # model.load_state_dict(state['model_state_dict'])
+    # # del state
     # model = model.eval()
-    #
-    # # Find best threshold
-    # b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader, binary=True)
+    # find_best_threshold_binary(np.arange(0.05, 1, 0.05), model, dataloader)
+
+    # ------------------------------------------------------------------------------------------------------------------------------------------
+
+    df = read_dataset('../dataset/train.csv',
+                      '../dataset/train_images', )
+    # df = df.dropna(subset=[1, 2, 3, 4], how='all')
+    dataloader = get_dataloader(df, transforms,
+                                batch_size=2,
+                                shuffle=False,
+                                num_workers=6,
+                                phase='valid',
+                                catalyst=False,
+                                pin_memory=False,
+                                binary=False,
+                                multi=False)
+
+    from stage_experiments.transforms_1_7.model import Model
+    # Load model
+    model = Model()
+    # model = smp.Unet('resnet50', encoder_weights=None, classes=4, activation=None)
+    state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.1.resnet50_stages_transforms/checkpoints/best.pth')
+    # model = UNet16(4, pretrained=True).cuda().eval()
+    # state = torch.load('/home/druzhinin/HDD/kaggle/kaggle_severstal/logdir/1.5.ternausnet/checkpoints/best.pth')
+    model.load_state_dict(state['model_state_dict'])
+    model.cuda().eval()
+    del state
+    model = model.eval()
+
+    # Find best threshold
+    b = find_best_threshold(np.arange(0.05, 1, 0.05), model, dataloader, binary=False)
     # b = 0.6
     # best_thres = find_best_threshold_area_and_proba([b],
     #                                                 np.arange(1000, 5001, 500),

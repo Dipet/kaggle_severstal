@@ -3,8 +3,8 @@ model_params:
 
 
 args:
-  expdir: "/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/stage_experiments/transforms_1_7"
-  logdir: "/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/logdir/1.1.resnet50_stages_transforms"
+  expdir: "/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/stage_experiments/resized_1_8"
+  logdir: "/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/logdir/1.1.fpn_dpn131_resized"
 
 distributed_params:
   opt_level: O1
@@ -15,8 +15,7 @@ stages:
     minimize_metric: False
 
   data_params:
-    batch_size: 8
-    num_workers: 8
+    num_workers: 4
 
   criterion_params:
     criterion: BCEWithLogitsLoss
@@ -53,9 +52,11 @@ stages:
       callback: CheckpointCallback
 
   stage1:
+    data_params:
+      batch_size: 20
 
     state_params:
-      num_epochs: 20
+      num_epochs: 10
 
     optimizer_params:
       optimizer: Adam
@@ -66,18 +67,24 @@ stages:
       weight_decay: 0.00001
 
   stage2:
+    data_params:
+      batch_size: 5
+
     state_params:
-      num_epochs: 20
+      num_epochs: 15
 
-      optimizer_params:
-        optimizer: Adam
+    optimizer_params:
+      optimizer: Adam
 
-        lr_linear_scaling:
-          lr: 0.0001
-          base_batch_size: 8
-        weight_decay: 0.00001
+      lr_linear_scaling:
+        lr: 0.0001
+        base_batch_size: 8
+      weight_decay: 0.00001
 
   stage3:
+    data_params:
+      batch_size: 3
+
     state_params:
       num_epochs: 20
 
@@ -90,18 +97,9 @@ stages:
       weight_decay: 0.00001
 
   stage4:
-    state_params:
-      num_epochs: 10
+    data_params:
+      batch_size: 3
 
-    optimizer_params:
-      optimizer: Adam
-
-      lr_linear_scaling:
-        lr: 0.00001
-        base_batch_size: 8
-      weight_decay: 0.00001
-
-  stage5:
     state_params:
       num_epochs: 5
 
@@ -109,6 +107,6 @@ stages:
       optimizer: Adam
 
       lr_linear_scaling:
-        lr: 0.000005
+        lr: 0.00005
         base_batch_size: 8
       weight_decay: 0.00001
