@@ -40,16 +40,27 @@ def rle_to_mask(rle):
     return mask.reshape(256, 1600, order='F')
 
 
-class SteelDataset(Dataset):
-    def __init__(self, df, transforms, phase='train', catalyst=True, binary=False, multi=False):
+class BaseSteelDataset(Dataset):
+    def __init__(self, df, transforms):
         self.df = df
         self.transforms = transforms
-        self.phase = phase
-        self.catalyst = catalyst
-        self.binary = binary
-        self.multi = multi
 
-    def make_mask(self, row_id):
+    def _get_data(self, idx):
+        img_path = self.df.iloc[idx].name
+        img = cv.imread(img_path, cv.IMREAD_COLOR)
+        return {'image': img, 'img_path': img_path}
+
+    def __getitem__(self, idx):
+        data = self.transforms(**self._get_data(idx))
+        data['features'] = data.pop('image')
+        return data
+
+    def __len__(self):
+        return len(self.df)
+
+
+class TrainSteelDataset(BaseSteelDataset):
+    def _make_mask(self, row_id):
         '''Given a row index, return image_id and mask (256, 1600, 4)'''
         labels = self.df.iloc[row_id][:4]
         masks = np.zeros((256, 1600, 4), dtype=np.float32)  # float32 is V.Imp
@@ -60,43 +71,32 @@ class SteelDataset(Dataset):
                 masks[:, :, idx] = rle_to_mask(label)
         return masks
 
-    def _get_train_valid(self, idx):
-        img_path = self.df.iloc[idx].name
+    def _get_data(self, idx):
+        data = super()._get_data(idx)
+        data['mask'] = self._make_mask(idx)
+        return data
 
-        img = cv.imread(img_path, cv.IMREAD_COLOR)
-        mask = self.make_mask(idx)
+    def __getitem__(self, idx):
+        data = super().__getitem__(idx)
 
-        if self.transforms:
-            augmented = self.transforms(image=img, mask=mask)
-            img = augmented['image']
-            mask = augmented['mask']  # 1x256x1600x4
-
+        mask = data.pop('mask')
         if isinstance(mask, np.ndarray):
             mask = np.transpose(mask, [2, 0, 1])
         else:
             mask = mask[0].permute(2, 0, 1)  # 1x4x256x1600
 
-        if self.catalyst:
-            return {'targets': mask, 'features': img}
-        else:
-            return img, mask
+        data['targets'] = mask
+        return data
 
-    def _get_infer(self, idx):
-        img_path = self.df.iloc[idx].name
 
-        img = cv.imread(img_path, cv.IMREAD_COLOR)
+class InferSteelDataset(BaseSteelDataset):
+    pass
 
-        if self.transforms:
-            augmented = self.transforms(image=img)
-            img = augmented['image']
 
-        if self.catalyst:
-            return {'features': img}
-        else:
-            return img
-
-    def _get_multi(self, idx):
-        img, mask = self._get_train_valid(idx)
+class MultiClassSteelDataset(TrainSteelDataset):
+    def __getitem__(self, idx):
+        data = super().__getitem__(idx)
+        mask = data.pop('targets')
 
         cls = []
         for m in mask:
@@ -105,50 +105,22 @@ class SteelDataset(Dataset):
             else:
                 cls.append(torch.any(m != 0))
 
-        cls = torch.tensor(cls).float()
+        data['targets'] = torch.tensor(cls).float()
+        return data
 
-        if self.catalyst:
-            return {'targets': cls, 'features': img}
-        else:
-            return img, cls
 
-    def _get_binary(self, idx):
-        img_path = self.df.iloc[idx].name
-
-        img = cv.imread(img_path, cv.IMREAD_COLOR)
-        mask = self.make_mask(idx)
-
-        if self.transforms:
-            augmented = self.transforms(image=img, mask=mask)
-            img = augmented['image']
-            mask = augmented['mask']  # 1x256x1600x4
+class BinaryClassSteelDataset(TrainSteelDataset):
+    def __getitem__(self, item):
+        data = super(TrainSteelDataset, self).__getitem__(item)
+        mask = data.pop('mask')
 
         if isinstance(mask, np.ndarray):
             cls = np.any(mask != 0).astype(int).astype(float)
         else:
             cls = torch.Tensor([torch.any(mask != 0).long().float()])
 
-        if self.catalyst:
-            return {'targets': cls, 'features': img}
-        else:
-            return img, cls
-
-    def __getitem__(self, idx):
-        if self.phase == 'infer':
-            return self._get_infer(idx)
-
-        if self.binary:
-            return self._get_binary(idx)
-        elif self.multi:
-            return self._get_multi(idx)
-
-        if self.phase in ['train', 'valid', 'test']:
-            return self._get_train_valid(idx)
-
-        raise Exception('Something wrong')
-
-    def __len__(self):
-        return len(self.df)
+        data['targets'] = cls
+        return data
 
 
 def get_hard_train_transforms(mean, std):

@@ -5,6 +5,7 @@ from catalyst.dl import ConfigExperiment
 from utils.dataset import *
 
 from sklearn.model_selection import train_test_split
+from torch.nn import BCEWithLogitsLoss
 
 
 class Experiment(ConfigExperiment):
@@ -18,9 +19,9 @@ class Experiment(ConfigExperiment):
 
         transforms = []
         if stage == 'stage1':
-            transforms += [albu.Resize(128, 512, p=1)]
+            transforms += [albu.RandomCrop(256, 256, p=1)]
         elif stage == 'stage2':
-            transforms += [albu.Resize(256, 1024, p=1)]
+            transforms += [albu.RandomCrop(256, 1024, p=1)]
         else:
             transforms += [albu.OneOf([
                 ShiftScaleRotate(shift_limit=0.25,
