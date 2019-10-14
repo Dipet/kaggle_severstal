@@ -90,15 +90,19 @@ def find_best_multiclass(df, tta,  model, thresholds):
         values = np.concatenate(values, axis=0)
 
         for cls in list(accuracy.keys()):
-            accuracy[cls][t] = np.sum(values[:, cls]) / len(values)
+            accuracy[cls][t] = np.sum(values[:, cls]) / len(values[:, cls])
 
-    accuracy = [(i, val) for i, val in accuracy.items()]
-    accuracy = sorted(accuracy, key=lambda x: x[1])
+    bests = {}
+    for cls, (key, data) in enumerate(accuracy.items()):
+        d = [(i, val) for i, val in data.items()]
+        d = sorted(d, key=lambda x: x[1])
+        print(f'Class: {cls}; Best: {d[-1]} Worse: {d[0]} Mean: {np.mean([i for _, i in d])}')
+        bests[cls] = d[-1]
 
-    print(f'Best: {accuracy[-1]} Worse: {accuracy[0]} Mean: {np.mean([i for _, i in accuracy])}')
-    return accuracy[-1]
+    return bests
 
-find_best_multiclass(df[:10], transforms, resnet34_cls, np.arange(0.05, 1.0, 0.05))
+
+find_best_multiclass(df, transforms, resnet34_cls, np.arange(0.05, 1.0, 0.05))
 
 # res = []
 # without_mask = set()
