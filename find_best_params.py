@@ -111,6 +111,7 @@ def dice(preds, true, eps=1e-7):
 
     return dice
 
+
 def find_best_mask(df, tta,  model, conf_thresholds, min_size_thresholds, batch=16):
     loaders = get_tta_loaders(df, tta, TrainSteelDataset, batch=batch)
 
@@ -124,13 +125,18 @@ def find_best_mask(df, tta,  model, conf_thresholds, min_size_thresholds, batch=
 
         for conf_t in conf_thresholds:
             _preds = (preds > conf_t).float()
+            _preds_sum = _preds.sum(axis=(2, 3))
 
             for size_t in min_size_thresholds:
                 key = (conf_t, size_t)
                 if key not in results:
                     results[key] = []
 
-                data = dice(_preds, true)
+                cond = _preds_sum < size_t
+                _p = _preds.clone()
+                _p[cond] = torch.zeros_like(_p[cond])
+                data = dice(_p, true)
+
                 data = torch.where((data < 1e-7) & true_not_exists, torch.ones_like(data), data)
                 results[key].append(data)
 
@@ -141,24 +147,16 @@ def find_best_mask(df, tta,  model, conf_thresholds, min_size_thresholds, batch=
         for i in range(4):
             _results[i].append([key, item[i]])
 
+    bests = {}
     for cls, item in _results.items():
         item = sorted(item, key=lambda x: x[1])
         best = item[-1]
         params, d = best
         print(f'Class: {cls}; Best: conf_thres={params[0]:.2f} size_thres={params[1]:.0f} dice={d:.5f}')
 
-    # for name, data in results.items():
-    #
-    #     d = []
-    #     for key, item in data.items():
-    #         d.append([key, np.array(item).mean()])
-    #
-    #     _results[name] = sorted(d, key=lambda x: x[1])
-    #
-    # print(f'Best catalyst: {_results["catalyst"][-1]}')
-    # print(f'Best my: {_results["my"][-1]}')
-    #
-    # return {'catalyst': _results['catalyst'][-1], 'my': _results['my'][-1]}
+        bests[cls] = best
+
+    return bests
 
 
 if __name__ == '__main__':
