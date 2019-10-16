@@ -159,23 +159,23 @@ def find_best_mask(df, tta,  model, conf_thresholds, min_size_thresholds, batch=
     return bests
 
 
+def create_transforms(additional):
+    res = list(additional)
+    # add necessary transformations
+    res.extend([
+        A.Normalize(
+            mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+        ),
+        ChannelTranspose()
+    ])
+    res = A.Compose(res)
+    return res
+
+
 if __name__ == '__main__':
     df = read_dataset(
         '/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/dataset/train.csv',
         '/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/dataset/train_images')
-
-
-    def create_transforms(additional):
-        res = list(additional)
-        # add necessary transformations
-        res.extend([
-            A.Normalize(
-                mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
-            ),
-            ChannelTranspose()
-        ])
-        res = A.Compose(res)
-        return res
 
 
     # Different transforms for TTA wrapper
@@ -190,14 +190,38 @@ if __name__ == '__main__':
 
     device = 'cuda'
 
+    print('resnet34-class01')
+    model = torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/resnet34-class01/torchscript.pth', map_location=device)
+    find_best_multiclass(df, transforms, model, np.arange(0.05, 1.0, 0.05))
 
-    # print('Multiclass')
-    # model = torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/resnet34-class01/torchscript.pth', map_location=device)
-    # find_best_multiclass(df, transforms, model, np.arange(0.05, 1.0, 0.05))
-    #
-    # print('Binary')
-    # model = torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/12mobilenet-severstal/torchscript.pth', map_location=device)
-    # find_best_binary(df, transforms, model, np.arange(0.05, 1.0, 0.05))
+    print()
+    print('12mobilenet-severstal')
+    model = torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/12mobilenet-severstal/torchscript.pth', map_location=device)
+    find_best_binary(df, transforms, model, np.arange(0.05, 1.0, 0.05))
 
-    model = torch.jit.load( '/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/11resnet50-hard-severstal/torchscript.pth', map_location=device)
-    find_best_mask(df, transforms, model, np.arange(0.05, 1.0, 0.05), [500, 1000, 2000, 3000])
+    class Model(torch.nn.Module):
+        def __init__(self, models, weights):
+            self.models = models
+            self.weights = weights
+
+        def __call__(self, x):
+            res = []
+            x = x.cuda()
+            s = np.sum(self.weights)
+            with torch.no_grad():
+                for m, w in zip(self.models, self.weights):
+                    res.append(m(x) * w / s)
+            res = torch.stack(res)
+            return torch.sum(res, dim=0)
+
+    models = [
+        torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/11resnet50-hard-severstal/torchscript.pth', map_location=device),
+        torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/11se-resnext101-severstal/torchscript.pth', map_location=device),
+        torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/severstalmodels/unet_mobilenet2.pth', map_location=device),
+        torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/severstalmodels/unet_resnet34.pth', map_location=device),
+        torch.jit.load('/mnt/HDD/home/druzhinin/kaggle/kaggle_severstal/download/severstalmodels/unet_se_resnext50_32x4d.pth', map_location=device)
+        ]
+    model = Model(models, [2, 3, 1, 1, 1])
+    print()
+    print('Mask models')
+    find_best_mask(df, transforms, model, np.arange(0.05, 1.0, 0.05), [0, 500, 1000, 1500, 2000, 2500, 3000])
